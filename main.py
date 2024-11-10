@@ -59,13 +59,20 @@ def convert_to_text(file_name, file_data):
     else:
         return "Unsupported file format"
 
-
-
 @app.route('/submit-resumes', methods=['POST'])
 def submit_resumes():
     data = request.json
+    
+    # Extracting fields from the request body
+    company_name = data.get("companyName")
     posting_id = data.get("postingId")
+    source = data.get("source")
     resume_url = data.get("resumeUrl")
+    batch_id = data.get("batchId")
+    
+    # Basic validation for required fields
+    if not all([company_name, posting_id, source, resume_url, batch_id]):
+        return jsonify({"error": "Missing required fields in the request body"}), 400
 
     try:
         # Step 1: Download the document
@@ -74,12 +81,12 @@ def submit_resumes():
         # Step 2: Convert document to text
         text_content = convert_to_text(file_name, file_data)
 
-        # Print the extracted text to the console
-        print("Extracted Text Content:\n", text_content)
-
         # Step 3: Return the result as JSON
         return jsonify({
+            "companyName": company_name,
             "postingId": posting_id,
+            "source": source,
+            "batchId": batch_id,
             "resumeText": text_content
         })
     except Exception as e:
@@ -87,5 +94,3 @@ def submit_resumes():
 
 if __name__ == '__main__':
     app.run(port=5000)
-
-
