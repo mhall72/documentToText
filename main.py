@@ -16,6 +16,12 @@ app = Flask(__name__)
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# Dummy endpoint for warming up the container
+@app.route('/dummy', methods=['GET'])
+def dummy():
+    logging.info("Dummy endpoint called for warm-up.")
+    return jsonify({"message": "Container is warmed up and ready!"}), 200
+
 # Helper function to download the document
 def download_document(url):
     response = requests.get(url)
