@@ -1,0 +1,7 @@
+Flask
+requests
+python-docx
+PyMuPDF
+html2text
+pillow
+pytesseract
