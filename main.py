@@ -161,7 +161,7 @@ def submit_resumes():
         insert_log_entry(resume_url, "Processed", "Success", microservice_id=microservice_name)
 
         # Step 6: Return the result from the external endpoint
-        """
+        
         return jsonify({
             "companyName": company_name,
             "postingId": posting_id,
@@ -170,7 +170,7 @@ def submit_resumes():
             "resumeText": text_content,
             "externalResponse": result
         })
-        """
+        
     except Exception as e:
         logging.error(f"Error processing resume: {e}")
 
