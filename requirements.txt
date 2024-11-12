@@ -5,3 +5,4 @@ PyMuPDF
 html2text
 pillow
 pytesseract
+psycopg2

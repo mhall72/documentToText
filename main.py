@@ -10,11 +10,42 @@ from io import BytesIO
 from PIL import Image
 import pytesseract
 import tempfile
+import psycopg2
 
 app = Flask(__name__)
 
+microservice_name = "textToDocument"
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+DB_CONNECTION_STRING = "user=postgres.tvkwdvwednprjmomudhg password=-P7M2jft9rrR*XU host=aws-0-us-west-1.pooler.supabase.com port=6543 dbname=postgres"
+
+# Function to insert log entry into log_resume_processing table
+def insert_log_entry(resume_url, processing_stage, status, error_message=None, microservice_id=microservice_name):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(DB_CONNECTION_STRING)
+        cursor = conn.cursor()
+        
+        insert_query = """
+        INSERT INTO log_resume_processing (resumeUrl, processing_stage, timestamp, status, error_message, microservice_id)
+        VALUES (%s, %s, NOW(), %s, %s, %s)
+        """
+        
+        cursor.execute(insert_query, (resume_url, processing_stage, status, error_message, microservice_id))
+        conn.commit()
+        
+    except Exception as e:
+        logging.error(f"Failed to insert log entry: {e}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 
 # Dummy endpoint for warming up the container
 @app.route('/dummy', methods=['GET'])
@@ -97,13 +128,16 @@ def submit_resumes():
         return jsonify({"error": "Missing required fields in the request body"}), 400
 
     try:
+        # Log the "Received" stage
+        insert_log_entry(resume_url, "Received", "In Progress", microservice_id=microservice_name)
+
         # Step 1: Download the document
         file_name, file_data = download_document(resume_url)
         logging.info(f"Downloaded document: {file_name}")
 
         # Step 2: Convert document to text
         text_content = convert_to_text(file_name, file_data)
-        print(text_content)
+        logging.info("Document converted to text")
 
         # Step 3: Prepare the payload for the external endpoint
         payload = {
@@ -123,7 +157,11 @@ def submit_resumes():
         # Step 5: Send the payload to the external endpoint
         result = send_to_endpoint(endpoint_url, payload)
 
+        # Log the "Processed" stage as "Success"
+        insert_log_entry(resume_url, "Processed", "Success", microservice_id=microservice_name)
+
         # Step 6: Return the result from the external endpoint
+        """
         return jsonify({
             "companyName": company_name,
             "postingId": posting_id,
@@ -132,10 +170,14 @@ def submit_resumes():
             "resumeText": text_content,
             "externalResponse": result
         })
+        """
     except Exception as e:
         logging.error(f"Error processing resume: {e}")
-        return jsonify({"error": str(e)}), 500
 
+        # Log the "Processed" stage as "Failure"
+        insert_log_entry(resume_url, "Processed", "Failure", str(e), microservice_id=microservice_name)
+
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
