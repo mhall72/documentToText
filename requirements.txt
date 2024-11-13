@@ -6,3 +6,6 @@ html2text
 pillow
 pytesseract
 psycopg2
+easyocr
+beautifulsoup4
+opencv-python-headless

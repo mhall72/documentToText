@@ -6,6 +6,12 @@ RUN apt-get update && apt-get install -y \
     libmupdf-dev \
     tesseract-ocr \
     libgl1-mesa-glx \
+    libpq-dev \
+    gcc \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages

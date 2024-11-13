@@ -11,10 +11,14 @@ from PIL import Image
 import pytesseract
 import tempfile
 import psycopg2
+import easyocr
 
 app = Flask(__name__)
 
 microservice_name = "textToDocument"
+
+# Initialize the OCR reader
+ocr_reader = easyocr.Reader(['en','fr','es'])
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -64,21 +68,73 @@ def download_document(url):
         logging.error(f"Failed to download document from {url}")
         raise Exception("Could not download file")
 
+# Function to perform OCR on an image using EasyOCR
+def perform_ocr_on_image(image):
+    try:
+        text = ocr_reader.readtext(image, detail=0)
+        return "\n".join(text)
+    except Exception as e:
+        logging.error(f"Error during OCR processing: {e}")
+        return ""
+
 # Helper functions to handle different document conversions
 def convert_pdf_to_text(file_data):
     text = ""
     with fitz.open(stream=file_data, filetype="pdf") as pdf:
         for page in pdf:
-            text += page.get_text()
+            # Attempt text extraction
+            page_text = page.get_text()
+            if page_text.strip():  # If text is found, add to output
+                text += page_text
+            else:
+                # Perform OCR on page if no text is found
+                logging.info("No text found on PDF page, performing OCR.")
+                page_image = page.get_pixmap()
+                with tempfile.NamedTemporaryFile(suffix=".png") as temp_img_file:
+                    page_image.save(temp_img_file.name)
+                    text += perform_ocr_on_image(temp_img_file.name)
     return text
 
+# Updated DOCX conversion with OCR fallback
 def convert_docx_to_text(file_data):
     doc = Document(file_data)
-    return "\n".join([paragraph.text for paragraph in doc.paragraphs])
+    text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+    
+    if not text.strip():  # If no text, process images with OCR
+        logging.info("No text found in DOCX, performing OCR on images.")
+        for rel in doc.part.rels.values():
+            if "image" in rel.target_ref:
+                with tempfile.NamedTemporaryFile(suffix=".png") as temp_img_file:
+                    img = Image.open(BytesIO(rel.target_part.blob))
+                    img.save(temp_img_file.name)
+                    text += perform_ocr_on_image(temp_img_file.name)
+    return text
 
+# Updated HTML conversion with OCR fallback
 def convert_html_to_text(file_data):
+    from bs4 import BeautifulSoup
+    import requests
     html_content = file_data.read().decode('utf-8')
-    return html2text.html2text(html_content)
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # Extract text from HTML
+    text = soup.get_text(separator="\n").strip()
+    
+    # Perform OCR on images if HTML text is minimal
+    if len(text) < 50:  # Adjust threshold as needed
+        logging.info("No text or minimal text in HTML, performing OCR on images.")
+        for img_tag in soup.find_all("img"):
+            img_url = img_tag.get("src")
+            if img_url:
+                try:
+                    img_data = requests.get(img_url).content
+                    with tempfile.NamedTemporaryFile(suffix=".png") as temp_img_file:
+                        temp_img_file.write(img_data)
+                        temp_img_file.flush()
+                        text += perform_ocr_on_image(temp_img_file.name)
+                except Exception as e:
+                    logging.error(f"Error loading image for OCR in HTML: {e}")
+    return text
 
 def convert_image_to_text(file_data):
     image = Image.open(file_data)
