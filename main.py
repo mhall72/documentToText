@@ -18,7 +18,7 @@ app = Flask(__name__)
 microservice_name = "textToDocument"
 
 # Initialize the OCR reader
-ocr_reader = easyocr.Reader(['en','fr','es'])
+ocr_reader = easyocr.Reader(['en'])
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
